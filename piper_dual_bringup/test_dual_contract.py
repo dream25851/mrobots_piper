@@ -38,14 +38,37 @@ class DualContractTests(unittest.TestCase):
         self.assertIn("expected two piper bridges", wrapper)
         self.assertIn("controller_manager_compat.py", wrapper)
         self.assertIn("RMW_IMPLEMENTATION=rmw_cyclonedds_cpp", wrapper)
+        self.assertIn("/rk3588_piper/controller_manager", wrapper)
+
+        stop = (ROOT / "host_stop_board_dual.sh").read_text()
+        self.assertIn("[c]ontroller_manager_compat.py", stop)
+        self.assertIn("kill -INT", stop)
+        self.assertIn("safe to start the NUC RT backend", stop)
 
     def test_controller_compat_is_ready_gated_and_explicitly_transitional(self) -> None:
         compat = (ROOT / "controller_manager_compat.py").read_text()
-        self.assertIn("/controller_manager/list_controllers", compat)
-        self.assertIn("/controller_manager/switch_controller", compat)
+        self.assertIn('/list_controllers', compat)
+        self.assertIn('/switch_controller', compat)
         self.assertIn("STATUS_TIMEOUT_S", compat)
         self.assertIn("_side_ready", compat)
         self.assertIn("this is not a ros2_control controller_manager", compat)
+        self.assertIn("gripper_ready", compat)
+
+    def test_rk3588_execution_manager_config_is_namespaced(self) -> None:
+        config = (ROOT / "config" / "execution_manager_rk3588.yaml").read_text()
+        self.assertEqual(config.count("controller_manager: /rk3588_piper/controller_manager"), 4)
+        self.assertNotIn("controller_manager: /controller_manager\n", config)
+
+    def test_board_bridge_implements_gripper_contract(self) -> None:
+        bridge = (ROOT / "piper_bridge.py").read_text()
+        self.assertIn("Float64MultiArray", bridge)
+        self.assertIn('/execution/{side}_gripper/joint_reference', bridge)
+        self.assertIn("GetArmGripperMsgs", bridge)
+        self.assertIn("GripperCtrl", bridge)
+        self.assertIn("gripper_joint1", bridge)
+        demo = (ROOT / "send_gripper_motion.py").read_text()
+        self.assertIn("Float64MultiArray", demo)
+        self.assertIn("gripper feedback moved only", demo)
 
     def test_can_mapping_is_serial_based(self) -> None:
         prepare = (ROOT / "board_prepare_piper_can.sh").read_text()

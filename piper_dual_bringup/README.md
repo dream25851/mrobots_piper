@@ -21,7 +21,13 @@ USB 2.0 或 USB 3.0 物理口不会改变 CAN 带宽，主要关注 Hub 供电�
 ```
 
 它通过 `192.168.1.19:8710` 执行严格双 CAN 检查、启动板端双 bridge，并启动
-本机 `controller_manager_compat.py`。重复运行是幂等的，只会复用健康进程。
+本机 `/rk3588_piper/controller_manager` 兼容服务。重复运行是幂等的，只会复用健康进程。
+
+切换回 NUC RT 后端前执行：
+
+```bash
+/home/alpha/mrobot/piper_dual_bringup/host_stop_board_dual.sh
+```
 
 `/data/local/piper_dual_bringup/board_start_dual.sh` 是板端路径，不能直接在
 `alpha@alpha` 的本机 shell 中运行。
@@ -40,6 +46,8 @@ PIPER_ENABLE_ACTUATION=1 /data/local/piper_dual_bringup/board_start_dual.sh
 ```text
 /execution/left_arm/joint_reference  -> piper1
 /execution/right_arm/joint_reference -> piper0
+/execution/left_gripper/joint_reference  -> piper1
+/execution/right_gripper/joint_reference -> piper0
 /joint_states                         -> 工作站/RViz
 /piper1/status、/piper0/status         -> ready/fault/feedback
 ```
@@ -49,8 +57,8 @@ PIPER_ENABLE_ACTUATION=1 /data/local/piper_dual_bringup/board_start_dual.sh
 `controller_manager_compat.py` 在工作站运行，只提供 Execution Manager claim 所需的：
 
 ```text
-/controller_manager/list_controllers
-/controller_manager/switch_controller
+/rk3588_piper/controller_manager/list_controllers
+/rk3588_piper/controller_manager/switch_controller
 ```
 
 只有对应 bridge 的 status 在 1 秒内更新且满足 `actuate=true、ready=true、fault=""`
@@ -58,10 +66,11 @@ PIPER_ENABLE_ACTUATION=1 /data/local/piper_dual_bringup/board_start_dual.sh
 
 ## 安全与验证
 
-- 保留硬关节限位、200 ms 反馈超时、fault 检查和 300 ms 命令 watchdog。
+- 保留硬关节限位、机械臂 200 ms/夹爪 500 ms 反馈超时、fault 检查和 300 ms 命令 watchdog。
 - 已取消绝对目标相对反馈的单步角度差拒绝条件。
 - 左右 J1 均完成超过旧门槛的 `0.08 rad` 往返，之后 CAN 错误计数仍为 0。
-- 标准 `apps/teleop.py` 已验证双臂 claim、ACTIVE、RELEASE 和 Ctrl+C 清理。
+- 左右夹爪均完成 `0.01 m` 单指位移往返，反馈与命令一致且无 fault。
+- 标准 `apps/teleop.py` 已验证双臂/双夹爪 claim、ACTIVE、RELEASE 和 Ctrl+C 清理。
 
 ```bash
 python3 -m unittest -v test_safety.py test_dual_contract.py

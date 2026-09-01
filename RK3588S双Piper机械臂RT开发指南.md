@@ -610,8 +610,8 @@ ros2 daemon stop
 
 RK3588S 已通过两只 candleLight USB-CAN 同时驱动双 Piper：稳定别名、双臂反馈、
 DDS 命令、RViz、标准 `apps/teleop.py` 的 claim/接管/释放均已实测通过。当前使用
-Python bridge，并由工作站过渡兼容层提供 Execution Manager 所需的 controller-manager
-服务契约。
+Python bridge，并由工作站 `/rk3588_piper/controller_manager` 过渡兼容层提供
+Execution Manager 所需的服务契约；NUC 原生 `/controller_manager` 与其隔离。
 
 在以下事项完成前，它还不是正式的 ros2_control RT 替代机：
 
@@ -620,8 +620,7 @@ Python bridge，并由工作站过渡兼容层提供 Execution Manager 所需的
 3. 当前 launch 依赖板端不存在的 Bash；
 4. 板端仍缺少 physical runtime 默认使用的 CycloneDDS RMW；
 5. 当前内核不是 PREEMPT_RT，500 Hz 确定性尚未验证；
-6. IPv4、HDC 端口和时间同步尚未做成开机持久服务；
-7. 夹爪尚未接入当前 Python bridge。
+6. IPv4、HDC 端口和时间同步尚未做成开机持久服务。
 
 推荐下一项工作是进入正式 C++ `ros2_control` overlay 开发，并补齐网络地址的
 开机持久化、时间同步及生产 DDS 配置。

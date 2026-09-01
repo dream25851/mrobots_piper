@@ -13,7 +13,7 @@
 - RK3588S：`192.168.1.19/24`，工作站：`192.168.1.18/24`。
 - ROS 2 Jazzy，`ROS_DOMAIN_ID=1`。
 - 两路 CAN 均为 1 Mbps，已完成双臂 DDS 遥操和 RViz 验证。
-- `apps/teleop.py` 的双臂 claim、0-G 接管、释放和 Ctrl+C 清理已实机通过。
+- `apps/teleop.py` 的双臂/双夹爪遥操、0-G 接管、释放和 Ctrl+C 清理已实机通过。
 
 ## 架构
 
@@ -21,7 +21,7 @@
 工作站
   Piper Leader(can0/can1) -> apps/teleop.py -> Execution Manager
                                       -> /execution/*/joint_reference
-                                      -> controller-manager 过渡兼容层
+                                      -> /rk3588_piper/controller_manager 过渡兼容层
                                                        |
                                                        | DDS
                                                        v
@@ -55,7 +55,8 @@ RK3588S
 ```bash
 cd /home/alpha/physical_ai_runtime
 pixi run -e runtime bash -c \
-  'source install/setup.bash && ros2 launch piper_manipulation_workstation_launch workstation_stack.launch.py'
+  'source install/setup.bash && ros2 launch piper_manipulation_workstation_launch workstation_stack.launch.py \
+    em_config:=/home/alpha/mrobot/piper_dual_bringup/config/execution_manager_rk3588.yaml'
 ```
 
 另开终端启动标准遥操客户端：
@@ -84,7 +85,7 @@ pixi run -e runtime bash -c \
 # 兼容控制器状态
 cd /home/alpha/physical_ai_runtime
 pixi run -e runtime ros2 control list_controllers \
-  --controller-manager /controller_manager
+  --controller-manager /rk3588_piper/controller_manager
 
 # 远端反馈
 pixi run -e runtime ros2 topic echo /joint_states --once
@@ -95,10 +96,11 @@ pixi run -e runtime ros2 topic echo /piper0/status --once
 ## 安全边界
 
 - 目标必须处于 Piper 硬关节限位内；不再使用旧的单次相对反馈步长拒绝条件。
-- 反馈超过 200 ms、机械臂 fault 或 bridge 未 ready 时停止写命令。
+- 机械臂反馈超过 200 ms、夹爪反馈超过 500 ms、硬件 fault 或 bridge 未 ready 时停止对应写命令。
 - 命令 300 ms 超时后保持最新反馈姿态。
 - CAN 映射只依据 USB 序列号，不依据临时 `can1/can2` 枚举顺序。
 - 停止 bridge 不自动失能，避免机械臂突然下坠。
+- 夹爪 ROS joint 是单指位移，板端范围 `0..0.035 m`；SDK 使用总开度并由 bridge 完成单位转换。
 
 标准 `apps/teleop.py` 按绝对关节目标工作。Leader 与 follower 初始姿态差异较大时，
 接管瞬间会向 Leader 姿态运动；调试零偏移相对遥操时可使用
@@ -108,14 +110,41 @@ pixi run -e runtime ros2 topic echo /piper0/status --once
 
 - 当前是 Python 200 Hz bridge，不是硬实时 ros2_control。
 - 板端尚无原生 C++ `controller_manager`、Piper hardware plugin 和 route controllers。
-- 当前 bridge 只驱动六轴机械臂，夹爪 controller 可被 Execution Manager 仲裁，但板端尚未执行夹爪命令。
 - 开发板 IPv4/HDC 8710 尚未安装持久化开机服务。
+
+## 与 NUC 模式切换
+
+两处 `physical_ai_runtime` patch 不改变 NUC follower：Leader 现场映射仍是本机
+`left=can0、right=can1`，Ctrl+C 改动只影响安全清理。NUC 原配置继续使用全局
+`/controller_manager`；RK3588S 专用配置使用
+`/rk3588_piper/controller_manager`，两者不会注册同名 controller-manager 服务。
+
+连接 NUC 时按原命令启动 workstation，不传 `em_config`；连接 RK3588S 时必须使用
+本 README 上方带 `execution_manager_rk3588.yaml` 的命令。
+
+切回 NUC 前先停止 RK 后端，避免两个 RT 后端同时发布 `/joint_states` 或订阅同一组
+`/execution/*` topic：
+
+```bash
+/home/alpha/mrobot/piper_dual_bringup/host_stop_board_dual.sh
+```
+
+它会正常停止板端双 bridge 和本机兼容服务，但不会主动失能机械臂。
 
 ## 测试
 
 ```bash
 cd /home/alpha/mrobot/piper_dual_bringup
 python3 -m unittest -v test_safety.py test_dual_contract.py
+```
+
+单独验证远端夹爪：
+
+```bash
+cd /home/alpha/physical_ai_runtime
+pixi run -e runtime env ROS_DOMAIN_ID=1 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+  PYTHONPATH=/home/alpha/mrobot/piper_dual_bringup \
+  python /home/alpha/mrobot/piper_dual_bringup/send_gripper_motion.py --side left --delta 0.01
 ```
 
 更多实现与移植背景见 [RK3588S 双 Piper 开发指南](RK3588S双Piper机械臂RT开发指南.md)。

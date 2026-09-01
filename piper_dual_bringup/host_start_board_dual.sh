@@ -11,6 +11,7 @@ ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-1}
 CYCLONEDDS_URI=${CYCLONEDDS_URI:-file://${RUNTIME_ROOT}/.config/cyclonedds_default.xml}
 COMPAT_PID_FILE=${COMPAT_PID_FILE:-${APP_ROOT}/.controller_manager_compat.pid}
 COMPAT_LOG=${COMPAT_LOG:-${APP_ROOT}/controller_manager_compat.log}
+PIPER_CONTROLLER_MANAGER=${PIPER_CONTROLLER_MANAGER:-/rk3588_piper/controller_manager}
 
 if [ ! -x "${HDC}" ]; then
   echo "ERROR: HDC executable not found: ${HDC}" >&2
@@ -73,7 +74,7 @@ else
   fi
   echo "Starting local controller-manager compatibility service..."
   setsid bash -c \
-    "source '${RUNTIME_ROOT}/install/setup.bash'; exec env ROS_DOMAIN_ID='${ROS_DOMAIN_ID}' RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI='${CYCLONEDDS_URI}' '${RUNTIME_ROOT}/.pixi/envs/runtime/bin/python' '${APP_ROOT}/controller_manager_compat.py'" \
+    "source '${RUNTIME_ROOT}/install/setup.bash'; exec env ROS_DOMAIN_ID='${ROS_DOMAIN_ID}' RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI='${CYCLONEDDS_URI}' PIPER_CONTROLLER_MANAGER='${PIPER_CONTROLLER_MANAGER}' '${RUNTIME_ROOT}/.pixi/envs/runtime/bin/python' '${APP_ROOT}/controller_manager_compat.py'" \
     > "${COMPAT_LOG}" 2>&1 < /dev/null &
   compat_pid=$!
   printf '%s\n' "${compat_pid}" > "${COMPAT_PID_FILE}"
@@ -83,5 +84,5 @@ else
     tail -n 100 "${COMPAT_LOG}" >&2 || true
     exit 7
   fi
-  echo "Controller-manager compatibility service is ready (pid=${compat_pid})."
+  echo "Controller-manager compatibility service is ready at ${PIPER_CONTROLLER_MANAGER} (pid=${compat_pid})."
 fi

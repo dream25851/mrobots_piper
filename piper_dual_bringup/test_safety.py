@@ -2,6 +2,9 @@ import math
 import unittest
 
 from safety import CommandRejected, choose_demo_target, expected_joint_names
+from safety import clamp_gripper_finger_position
+from safety import gripper_finger_position_to_raw_width
+from safety import gripper_raw_width_to_finger_position
 from safety import millidegrees_to_radians, offset_slew_target
 from safety import radians_to_millidegrees, validate_target
 
@@ -41,6 +44,16 @@ class SafetyTests(unittest.TestCase):
         restored = millidegrees_to_radians(raw)
         for expected, actual in zip(self.current, restored):
             self.assertAlmostEqual(expected, actual, places=5)
+
+    def test_gripper_units_use_full_width_for_sdk(self):
+        self.assertEqual(gripper_finger_position_to_raw_width(0.035), 70000)
+        self.assertAlmostEqual(gripper_raw_width_to_finger_position(70000), 0.035)
+
+    def test_gripper_target_clamps_and_rejects_nonfinite(self):
+        self.assertEqual(clamp_gripper_finger_position(-0.1), 0.0)
+        self.assertEqual(clamp_gripper_finger_position(0.1), 0.035)
+        with self.assertRaises(CommandRejected):
+            clamp_gripper_finger_position(math.nan)
 
     def test_offset_takeover_has_no_initial_jump(self):
         leader = (0.4, 0.2, -0.3, 0.8, -0.4, 0.5)

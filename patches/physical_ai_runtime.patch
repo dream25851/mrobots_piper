@@ -23,6 +23,14 @@ index c1aaa4c..8530bb9 100755
      ctx = rmi.Context.from_profile(args.profile)
      ctx.wait_until_ready(timeout=6.0)
  
+@@ -202,7 +208,6 @@ def main() -> None:
+     except (KeyboardInterrupt, EOFError):
+         print("\n\n[!] Teleoperation stopped by operator.")
+     finally:
+-        set_teleop_preempt(ctx.node, teleoperators, False)
+         ctx.close()
+         print("[✓] Teleoperation session closed safely.")
+ 
 diff --git a/src/bringup/piper_manipulation/workstation_launch/config/teleop/piper_leaders.yaml b/src/bringup/piper_manipulation/workstation_launch/config/teleop/piper_leaders.yaml
 index 52b611c..efadd69 100644
 --- a/src/bringup/piper_manipulation/workstation_launch/config/teleop/piper_leaders.yaml

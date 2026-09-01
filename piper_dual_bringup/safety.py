@@ -20,6 +20,10 @@ JOINT_LIMITS_RAD = (
 DEFAULT_DEMO_DELTA_RAD = 0.03
 DEFAULT_REMOTE_SLEW_STEP_RAD = 0.03
 MILLIDEGREES_PER_RADIAN = 1000.0 * 180.0 / math.pi
+# Piper SDK 0.6.2 limits the full gripper opening to 0.07 m.  The ROS joint
+# represents one finger, which travels half of the full opening width.
+GRIPPER_MAX_FINGER_POSITION_M = 0.035
+GRIPPER_RAW_UNITS_PER_METER = 1_000_000.0
 
 
 class CommandRejected(ValueError):
@@ -146,3 +150,26 @@ def millidegrees_to_radians(values: Sequence[int]) -> tuple[float, ...]:
     if len(values) != 6:
         raise CommandRejected("six joint values are required")
     return tuple(float(value) / MILLIDEGREES_PER_RADIAN for value in values)
+
+
+def clamp_gripper_finger_position(value: float) -> float:
+    """Clamp one-finger position in metres to the board SDK's gripper range."""
+
+    converted = float(value)
+    if not math.isfinite(converted):
+        raise CommandRejected("gripper position must be finite")
+    return min(GRIPPER_MAX_FINGER_POSITION_M, max(0.0, converted))
+
+
+def gripper_finger_position_to_raw_width(value: float) -> int:
+    """Convert one-finger metres to SDK full-width units of 0.001 mm."""
+
+    finger_position = clamp_gripper_finger_position(value)
+    return round(finger_position * 2.0 * GRIPPER_RAW_UNITS_PER_METER)
+
+
+def gripper_raw_width_to_finger_position(value: int) -> float:
+    """Convert SDK full-width units of 0.001 mm to one-finger metres."""
+
+    converted = float(value) / (2.0 * GRIPPER_RAW_UNITS_PER_METER)
+    return clamp_gripper_finger_position(converted)

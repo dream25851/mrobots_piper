@@ -10,6 +10,7 @@ bridge reports fresh, actuation-ready, fault-free status.
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import rclpy
@@ -37,9 +38,15 @@ CONTROLLER_TYPES = {
 class PiperControllerManagerCompat(Node):
     def __init__(self) -> None:
         super().__init__("piper_controller_manager_compat")
+        manager = os.environ.get(
+            "PIPER_CONTROLLER_MANAGER", "/rk3588_piper/controller_manager"
+        ).rstrip("/")
+        if not manager:
+            raise ValueError("PIPER_CONTROLLER_MANAGER must not be empty")
+        self._manager = manager
         self._states = {name: "inactive" for name in CONTROLLER_TYPES}
         self._states["joint_state_broadcaster"] = "active"
-        self._board_status: dict[str, tuple[bool, float, str]] = {}
+        self._board_status: dict[str, tuple[bool, bool, float, str]] = {}
 
         status_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -63,17 +70,17 @@ class PiperControllerManagerCompat(Node):
         ]
         self._list_service = self.create_service(
             ListControllers,
-            "/controller_manager/list_controllers",
+            f"{self._manager}/list_controllers",
             self._list_controllers,
         )
         self._switch_service = self.create_service(
             SwitchController,
-            "/controller_manager/switch_controller",
+            f"{self._manager}/switch_controller",
             self._switch_controllers,
         )
         self.get_logger().warning(
             "transitional controller-manager compatibility is active; "
-            "this is not a ros2_control controller_manager"
+            f"manager={self._manager}; this is not a ros2_control controller_manager"
         )
 
     def _on_status(self, side: str, message: String) -> None:
@@ -85,21 +92,27 @@ class PiperControllerManagerCompat(Node):
                 and not payload.get("fault")
             )
             fault = str(payload.get("fault") or "")
+            gripper_ready = bool(payload.get("gripper_ready")) and not payload.get(
+                "gripper_fault"
+            )
         except (TypeError, ValueError, json.JSONDecodeError):
             ready = False
+            gripper_ready = False
             fault = "malformed bridge status"
-        self._board_status[side] = (ready, time.monotonic(), fault)
+        self._board_status[side] = (ready, gripper_ready, time.monotonic(), fault)
 
-    def _side_ready(self, side: str) -> tuple[bool, str]:
+    def _side_ready(self, side: str, *, gripper: bool = False) -> tuple[bool, str]:
         status = self._board_status.get(side)
         if status is None:
             return False, f"{side} bridge status has not been received"
-        ready, received_at, fault = status
+        arm_ready, gripper_ready, received_at, fault = status
         age = time.monotonic() - received_at
         if age > STATUS_TIMEOUT_S:
             return False, f"{side} bridge status is stale ({age:.3f}s)"
+        ready = gripper_ready if gripper else arm_ready
         if not ready:
-            return False, f"{side} bridge is not ready" + (f": {fault}" if fault else "")
+            component = "gripper" if gripper else "arm"
+            return False, f"{side} {component} is not ready" + (f": {fault}" if fault else "")
         return True, ""
 
     def _list_controllers(self, _request, response):
@@ -118,12 +131,23 @@ class PiperControllerManagerCompat(Node):
             return response
 
         for side in ("left", "right"):
-            if any(name.startswith(f"{side}_") for name in request.activate_controllers):
-                ready, reason = self._side_ready(side)
-                if not ready:
-                    response.ok = False
-                    response.message = reason
-                    return response
+            side_activations = [
+                name
+                for name in request.activate_controllers
+                if name.startswith(f"{side}_")
+            ]
+            if side_activations:
+                requirements = []
+                if any("gripper" not in name for name in side_activations):
+                    requirements.append(False)
+                if any("gripper" in name for name in side_activations):
+                    requirements.append(True)
+                for needs_gripper in requirements:
+                    ready, reason = self._side_ready(side, gripper=needs_gripper)
+                    if not ready:
+                        response.ok = False
+                        response.message = reason
+                        return response
 
         for name in request.deactivate_controllers:
             if name in self._states and name != "joint_state_broadcaster":
