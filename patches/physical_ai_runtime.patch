@@ -1,0 +1,77 @@
+diff --git a/apps/teleop.py b/apps/teleop.py
+index c1aaa4c..8530bb9 100755
+--- a/apps/teleop.py
++++ b/apps/teleop.py
+@@ -19,7 +19,9 @@ import time
+ from contextlib import ExitStack
+ from typing import Any
+ 
++import rclpy
+ from rclpy.qos import QoSProfile, ReliabilityPolicy
++from rclpy.signals import SignalHandlerOptions
+ from std_srvs.srv import SetBool
+ from trajectory_msgs.msg import JointTrajectory
+ 
+@@ -89,6 +91,10 @@ def main() -> None:
+ 
+     # 1. Connect to Runtime & Profile
+     print("[1/3] Connecting to robot embodiment runtime...")
++    # Keep the ROS context alive while Python handles Ctrl+C.  Session cleanup
++    # must still be able to call the Leader release services before shutdown.
++    if not rclpy.ok():
++        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+     ctx = rmi.Context.from_profile(args.profile)
+     ctx.wait_until_ready(timeout=6.0)
+ 
+diff --git a/src/bringup/piper_manipulation/workstation_launch/config/teleop/piper_leaders.yaml b/src/bringup/piper_manipulation/workstation_launch/config/teleop/piper_leaders.yaml
+index 52b611c..efadd69 100644
+--- a/src/bringup/piper_manipulation/workstation_launch/config/teleop/piper_leaders.yaml
++++ b/src/bringup/piper_manipulation/workstation_launch/config/teleop/piper_leaders.yaml
+@@ -2,12 +2,12 @@
+ # SPDX-License-Identifier: Apache-2.0
+ # Piper Bimanual Master-Slave Teleoperation Configuration
+ #
+-# Site defaults for leader SocketCAN (field-verified): left=can1, right=can0.
++# Site defaults for leader SocketCAN (field-verified): left=can0, right=can1.
+ # Launch files should load this YAML and only override via empty CLI args.
+ 
+ piper_leader_left:
+   ros__parameters:
+-    can_interface: can1
++    can_interface: can0
+     publish_rate_hz: 200.0
+     feedback_timeout_s: 0.1
+     mit_kd_effort_damping: 0.0
+@@ -26,7 +26,7 @@ piper_leader_left:
+ 
+ piper_leader_right:
+   ros__parameters:
+-    can_interface: can0
++    can_interface: can1
+     publish_rate_hz: 200.0
+     feedback_timeout_s: 0.1
+     mit_kd_effort_damping: 0.0
+diff --git a/src/bringup/piper_manipulation/workstation_launch/test/test_piper_workstation_bringup_contract.py b/src/bringup/piper_manipulation/workstation_launch/test/test_piper_workstation_bringup_contract.py
+--- a/src/bringup/piper_manipulation/workstation_launch/test/test_piper_workstation_bringup_contract.py
++++ b/src/bringup/piper_manipulation/workstation_launch/test/test_piper_workstation_bringup_contract.py
+@@ -47,8 +47,8 @@ def test_leader_defaults_live_in_teleop_config_not_launch():
+     leaders = yaml.safe_load(
+         (ROOT / "config" / "teleop" / "piper_leaders.yaml").read_text(encoding="utf-8")
+     )
+-    assert leaders["piper_leader_left"]["ros__parameters"]["can_interface"] == "can1"
+-    assert leaders["piper_leader_right"]["ros__parameters"]["can_interface"] == "can0"
++    assert leaders["piper_leader_left"]["ros__parameters"]["can_interface"] == "can0"
++    assert leaders["piper_leader_right"]["ros__parameters"]["can_interface"] == "can1"
+     bringup = (LAUNCH_DIR / "piper_leaders.launch.py").read_text(encoding="utf-8")
+     assert 'default_value=""' in bringup
+     assert "left_joint1,left_joint2" not in bringup
+diff --git a/src/bringup/piper_manipulation/workstation_launch/README.md b/src/bringup/piper_manipulation/workstation_launch/README.md
+--- a/src/bringup/piper_manipulation/workstation_launch/README.md
++++ b/src/bringup/piper_manipulation/workstation_launch/README.md
+@@ -69,5 +69,5 @@ ros2 topic echo /teleop/piper_leader_right/status --once
+ 短暂断连后每 2 秒重连；启动后仍应以上述 `ros2 topic hz` 对两个腕部 topic 分别验
+ 证约 30 Hz。
+ 
+-真实 Leader 接管前还应确认 `can1`/`can0` 分别对应左/右 Leader，RT follower
++真实 Leader 接管前还应确认 `can0`/`can1` 分别对应左/右 Leader，RT follower
+ 控制器状态与预期一致，并保持急停可用。
