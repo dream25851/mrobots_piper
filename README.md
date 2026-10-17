@@ -1,7 +1,7 @@
 # mrobots_piper
 
 让 RK3588S 开发板通过两路 USB-CAN 驱动两台 Piper follower，并接入
-`physical_ai_runtime` 的 Execution Manager、`apps/teleop.py` 和 RViz2。
+`physical_ai_runtime` 的 Execution Manager、`apps/teleop.py` 和 RViz2。原始项目为https://github.com/dream25851/physical_ai_runtime
 
 ## 当前状态
 
