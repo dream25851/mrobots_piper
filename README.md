@@ -148,3 +148,13 @@ pixi run -e runtime env ROS_DOMAIN_ID=1 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
 ```
 
 更多实现与移植背景见 [RK3588S 双 Piper 开发指南](RK3588S双Piper机械臂RT开发指南.md)。
+
+## License / 许可证
+
+本项目采用 [Apache License 2.0](./LICENSE)，与 `physical_ai_runtime`、`Bimanual_Folding` 等仓库保持一致。在保留版权与许可声明的前提下，可自由使用、修改和再分发本仓库的脚本、配置、补丁与内核模块源码，具体条款以许可证原文为准。
+
+This project is released under the [Apache License 2.0](./LICENSE), consistent with the sibling repositories `physical_ai_runtime` and `Bimanual_Folding`. You may use, modify and redistribute the scripts, configurations, patches and kernel-module sources in this repository with attribution, subject to the terms of that license.
+
+仓库内的第三方组件仍遵循其原始许可证：`piper_dual_bringup/kernel/artifacts/` 下的 `gs_usb.ko` 由 Linux 内核源码编译，属 GPL-2.0；Piper SDK 与 ROS 2 依赖按其上游许可证分发。 / Third-party components keep their original licenses: `gs_usb.ko` under `piper_dual_bringup/kernel/artifacts/` is built from Linux kernel sources and is GPL-2.0, while the Piper SDK and ROS 2 dependencies follow their upstream licenses.
+
+Copyright 2026 Xiang Meng. / 版权所有 2026 孟想。
